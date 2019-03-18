@@ -13,9 +13,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
-
 	"golang.org/x/tools/go/vcs"
+	"io/ioutil"
+	"log"
+	"os"
+	"path"
 )
 
 var (
@@ -68,8 +70,38 @@ func run() error {
 
 func main() {
 	flag.Parse()
-
 	if err := run(); err != nil {
 		log.Fatal(err)
+	}
+	makeVendor()
+}
+
+const makeVendorKey = "MAKE_VENDOR"
+
+func makeVendor() {
+	if os.Getenv(makeVendorKey) != "1" {
+		return
+	}
+	dir, file := path.Split(*dest)
+	for  file != "external" {
+		if dir[len(dir)-1] == os.PathSeparator {
+			dir = dir[:len(dir)-1]
+		}
+		dir, file = path.Split(dir)
+		if dir == "" {
+			return
+		}
+	}
+	file = path.Join(dir, "DO_NOT_BUILD_HERE")
+	data, err := ioutil.ReadFile(file)
+	if err == nil {
+		dir = string(data)
+		depPath := path.Join(dir, "vendor", *importpath)
+		dir = path.Dir(depPath)
+		err = os.MkdirAll(dir, os.ModeDir|os.ModePerm)
+		if err == nil {
+			_ = os.RemoveAll(depPath)
+			_ = os.Symlink(*dest, depPath)
+		}
 	}
 }
