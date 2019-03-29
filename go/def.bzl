@@ -789,19 +789,29 @@ def _cgo_codegen_impl(ctx):
   out_dir = (ctx.configuration.genfiles_dir.path + '/' +
              p + ctx.attr.outdir)
   cc = ctx.fragments.cpp.compiler_executable
+  #NOTE(xinyan.wu)
+  base_go_srcs = []
+  go_srcs_dir = ""
+  for s in go_srcs:
+    basename = s.path
+    if basename.rfind("/") >= 0:
+      base_go_src = basename[basename.rfind("/")+1:]
+      go_srcs_dir = basename[:basename.rfind("/")+1]
+    base_go_srcs.append(base_go_src)
   cmds = [
       # We cannot use env for CC because $(CC) on OSX is relative
       # and '../' does not work fine due to symlinks.
       'export CC=$(cd $(dirname {cc}); pwd)/$(basename {cc})'.format(cc=cc),
       'export CXX=$CC',
       'objdir="%s/gen"' % out_dir,
+      'srcdir="%s"' % go_srcs_dir,
       'execroot=$(pwd)',
       'mkdir -p "$objdir"',
-      'unfiltered_go_files=(%s)' % ' '.join(["'%s'" % f.path for f in go_srcs]),
+      'unfiltered_go_files=(%s)' % ' '.join(["'%s'" % f for f in base_go_srcs]),
       'filtered_go_files=()',
       'for file in "${unfiltered_go_files[@]}"; do',
       '  stem=$(basename "$file" .go)',
-      '  if %s -cgo -quiet "$file"; then' % ctx.executable._filter_tags.path,
+      '  if %s -cgo -quiet "$srcdir$file"; then' % ctx.executable._filter_tags.path,
       '    filtered_go_files+=("$file")',
       '  else',
       '    grep --max-count 1 "^package " "$file" >"$objdir/$stem.go"',
@@ -812,8 +822,13 @@ def _cgo_codegen_impl(ctx):
       '  echo no buildable Go source files in %s >&1' % str(ctx.label),
       '  exit 1',
       'fi',
-      '"$GOROOT/bin/go" tool cgo -objdir "$objdir" -- %s "${filtered_go_files[@]}"' %
+      'current_goroot=$(cd "$GOROOT"; pwd)',
+      'export GOROOT=$current_goroot >&1',
+      'objdir=$(cd "$objdir"; pwd)',
+      'cd "$srcdir"',
+      '"$current_goroot/bin/go" tool cgo -objdir "$objdir" -- %s "${filtered_go_files[@]}"' %
           ' '.join(['"%s"' % copt for copt in copts]),
+      'echo $objdir >&1',
       # Rename the outputs using glob so we don't have to understand cgo's mangling
       # TODO(#350): might be fixed by this?.
       'for file in "${filtered_go_files[@]}"; do',
