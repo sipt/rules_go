@@ -17,6 +17,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"regexp"
 
 	"golang.org/x/tools/go/vcs"
 )
@@ -83,6 +84,26 @@ func makeVendor() {
 	if os.Getenv(makeVendorKey) != "1" {
 		return
 	}
+	importPath := *importpath
+	buildFile := path.Join(*dest, "BUILD")
+	if _, err := os.Stat(buildFile); os.IsNotExist(err) {
+		buildFile += ".bazel"
+		if _, err := os.Stat(buildFile); os.IsNotExist(err) {
+			buildFile = ""
+		}
+	}
+	if buildFile != "" {
+		data, err := ioutil.ReadFile(buildFile)
+		if err == nil {
+			rex, err := regexp.Compile(`go_prefix\("(.+)"\)`)
+			if err == nil {
+				results := rex.FindAllStringSubmatch(string(data), -1)
+				if len(results) > 0 && len(results[0]) > 1 {
+					importPath = results[0][1]
+				}
+			}
+		}
+	}
 	dir, file := path.Split(*dest)
 	for file != "external" {
 		if dir[len(dir)-1] == os.PathSeparator {
@@ -97,7 +118,7 @@ func makeVendor() {
 	data, err := ioutil.ReadFile(file)
 	if err == nil {
 		dir = string(data)
-		depPath := path.Join(dir, "vendor", *importpath)
+		depPath := path.Join(dir, "vendor", importPath)
 		dir = path.Dir(depPath)
 		err = os.MkdirAll(dir, os.ModeDir|os.ModePerm)
 		if err == nil {
