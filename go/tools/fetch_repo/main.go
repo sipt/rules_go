@@ -13,11 +13,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"golang.org/x/tools/go/vcs"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
+
+	"golang.org/x/tools/go/vcs"
 )
 
 var (
@@ -83,7 +84,7 @@ func makeVendor() {
 		return
 	}
 	dir, file := path.Split(*dest)
-	for  file != "external" {
+	for file != "external" {
 		if dir[len(dir)-1] == os.PathSeparator {
 			dir = dir[:len(dir)-1]
 		}
